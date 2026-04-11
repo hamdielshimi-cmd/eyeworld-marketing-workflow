@@ -11,14 +11,20 @@ export type TrpcContext = {
 export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
-  let user: User | null = null;
-
-  try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
-  }
+  // Authentication completely bypassed. Anyone with the URL has full Admin access.
+  const user: User = {
+    id: 1,
+    email: "admin@eyeworld.local",
+    name: "Eyeworld Admin",
+    role: "Admin",
+    accessStatus: "Active",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    openId: "bypassed-admin",
+    passwordHash: null,
+    avatarUrl: null,
+    loginMethod: "local"
+  };
 
   return {
     req: opts.req,
