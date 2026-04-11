@@ -19,8 +19,11 @@ import {
   upsertUser,
 } from "./db";
 import { notifyOwner } from "./_core/notification";
-import { ROLES, ACCESS_STATUSES } from "../drizzle/schema";
-
+import { ROLES, ACCESS_STATUSES, users } from "../drizzle/schema";
+import bcrypt from "bcryptjs";
+import { sdk } from "./_core/sdk";
+import { getDb } from "./db";
+import { ONE_YEAR_MS } from "@shared/const";
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -32,6 +35,73 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+    login: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          password: z.string().min(1, "Password is required"),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const user = await getUserByEmail(input.email);
+        if (!user || user.accessStatus !== ACCESS_STATUSES.ACTIVE) {
+          throw new Error("Invalid credentials or account inactive.");
+        }
+        if (!user.passwordHash) {
+          throw new Error("Password not set for this account. Please register again.");
+        }
+        const isValid = await bcrypt.compare(input.password, user.passwordHash);
+        if (!isValid) {
+          throw new Error("Invalid credentials.");
+        }
+
+        const sessionToken = await sdk.createSessionToken(user.openId, {
+          name: user.name || "",
+          expiresInMs: ONE_YEAR_MS,
+        });
+
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+        return { success: true };
+      }),
+    register: publicProcedure
+      .input(
+        z.object({
+          email: z.string().email(),
+          fullName: z.string().min(1, "Name is required"),
+          password: z.string().min(6, "Password must be at least 6 characters"),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const existing = await getUserByEmail(input.email);
+        if (existing) {
+          throw new Error("Email already registered.");
+        }
+
+        const passwordHash = await bcrypt.hash(input.password, 10);
+        const openId = `local-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        await db.insert(users).values({
+          openId,
+          email: input.email,
+          name: input.fullName,
+          passwordHash,
+          role: ROLES.VIEWER,
+          accessStatus: ACCESS_STATUSES.PENDING,
+          loginMethod: "local",
+        });
+
+        await notifyOwner({
+          title: `New Account Registered — ${input.fullName}`,
+          content: `A new user registered an account.\n\nName: ${input.fullName}\nEmail: ${input.email}`,
+        });
+
+        return { success: true };
+      }),
   }),
 
   // Workflow procedures

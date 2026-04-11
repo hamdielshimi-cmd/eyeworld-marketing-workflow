@@ -5,34 +5,58 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 export default function Login() {
-  const { isAuthenticated, loading } = useAuth();
-  const [step, setStep] = useState<"choice" | "access-request">("choice");
+  const { isAuthenticated, loading, refresh } = useAuth();
+  const [, setLocation] = useLocation();
+  const [step, setStep] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const requestAccessMutation = trpc.workflow.requestAccess.useMutation();
+  const loginMutation = trpc.auth.login.useMutation();
+  const registerMutation = trpc.auth.register.useMutation();
 
-  const handleRequestAccess = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !fullName) {
+    if (!email || !password) {
       toast.error("Please fill in all fields");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await requestAccessMutation.mutateAsync({ email, fullName });
-      toast.success("Access request submitted! You will be notified once approved.");
-      setEmail("");
-      setFullName("");
-      setStep("choice");
+      await loginMutation.mutateAsync({ email, password });
+      toast.success("Successfully logged in!");
+      await refresh();
+      setLocation("/");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to request access");
+      toast.error(error instanceof Error ? error.message : "Failed to sign in");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || !fullName) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await registerMutation.mutateAsync({ email, fullName, password });
+      toast.success("Registration successful! Your account is pending admin approval.");
+      setEmail("");
+      setPassword("");
+      setFullName("");
+      setStep("login");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to register");
     } finally {
       setIsSubmitting(false);
     }
@@ -47,6 +71,7 @@ export default function Login() {
   }
 
   if (isAuthenticated) {
+    setLocation("/");
     return null;
   }
 
@@ -64,25 +89,58 @@ export default function Login() {
           <CardHeader className="space-y-2">
             <CardTitle className="headline-md">Welcome</CardTitle>
             <CardDescription className="body-md">
-              {step === "choice"
+              {step === "login"
                 ? "Sign in to access the workflow management system"
-                : "Request access to the system"}
+                : "Create a new account"}
             </CardDescription>
           </CardHeader>
 
           <CardContent>
-            {step === "choice" ? (
-              <div className="space-y-4">
-                {/* Sign In Button */}
-                <a href={getLoginUrl()}>
-                  <Button className="w-full bg-primary text-on-primary hover:opacity-90">
-                    Sign In with Manus
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </a>
+            {step === "login" ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="email_login" className="label-md">
+                    Email Address
+                  </label>
+                  <Input
+                    id="email_login"
+                    type="email"
+                    placeholder="your.email@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isSubmitting}
+                    className="input-ghost"
+                  />
+                </div>
 
-                {/* Divider */}
-                <div className="relative">
+                <div className="space-y-2">
+                  <label htmlFor="password_login" className="label-md">
+                    Password
+                  </label>
+                  <Input
+                    id="password_login"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isSubmitting}
+                    className="input-ghost"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-primary text-on-primary hover:opacity-90"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    "Sign In"
+                  )}
+                </Button>
+
+                <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-border" />
                   </div>
@@ -91,23 +149,21 @@ export default function Login() {
                   </div>
                 </div>
 
-                {/* Request Access Button */}
                 <Button
+                  type="button"
                   variant="outline"
                   className="w-full"
-                  onClick={() => setStep("access-request")}
+                  onClick={() => {
+                    setStep("register");
+                    setPassword("");
+                  }}
+                  disabled={isSubmitting}
                 >
-                  Request Access
+                  Create an Account
                 </Button>
-
-                {/* Info Text */}
-                <p className="body-sm text-center text-muted-foreground">
-                  New to the system? Request access and an admin will review your request.
-                </p>
-              </div>
+              </form>
             ) : (
-              <form onSubmit={handleRequestAccess} className="space-y-4">
-                {/* Full Name Input */}
+              <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-2">
                   <label htmlFor="fullName" className="label-md">
                     Full Name
@@ -123,13 +179,12 @@ export default function Login() {
                   />
                 </div>
 
-                {/* Email Input */}
                 <div className="space-y-2">
-                  <label htmlFor="email" className="label-md">
+                  <label htmlFor="email_register" className="label-md">
                     Email Address
                   </label>
                   <Input
-                    id="email"
+                    id="email_register"
                     type="email"
                     placeholder="your.email@example.com"
                     value={email}
@@ -139,37 +194,42 @@ export default function Login() {
                   />
                 </div>
 
-                {/* Submit Button */}
+                <div className="space-y-2">
+                  <label htmlFor="password_register" className="label-md">
+                    Password
+                  </label>
+                  <Input
+                    id="password_register"
+                    type="password"
+                    placeholder="Create a password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isSubmitting}
+                    className="input-ghost"
+                  />
+                </div>
+
                 <Button
                   type="submit"
                   disabled={isSubmitting}
                   className="w-full bg-primary text-on-primary hover:opacity-90"
                 >
                   {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    "Submit Request"
+                    "Register"
                   )}
                 </Button>
 
-                {/* Back Button */}
                 <Button
                   type="button"
                   variant="ghost"
                   className="w-full"
-                  onClick={() => setStep("choice")}
+                  onClick={() => setStep("login")}
                   disabled={isSubmitting}
                 >
-                  Back
+                  Back to Sign In
                 </Button>
-
-                {/* Info Text */}
-                <p className="body-sm text-center text-muted-foreground">
-                  Your request will be reviewed by an administrator. You'll receive an email once your access is approved.
-                </p>
               </form>
             )}
           </CardContent>
