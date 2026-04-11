@@ -91,7 +91,7 @@ export const appRouter = router({
           name: input.fullName,
           passwordHash,
           role: ROLES.VIEWER,
-          accessStatus: ACCESS_STATUSES.PENDING,
+          accessStatus: ACCESS_STATUSES.ACTIVE,
           loginMethod: "local",
         });
 
