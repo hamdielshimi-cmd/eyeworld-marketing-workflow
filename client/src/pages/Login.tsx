@@ -31,8 +31,10 @@ export default function Login() {
     try {
       await loginMutation.mutateAsync({ email, password });
       toast.success("Successfully logged in!");
-      await refresh();
-      setLocation("/");
+      const result = await refresh();
+      if (result.data) {
+        setLocation("/");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to sign in");
     } finally {
