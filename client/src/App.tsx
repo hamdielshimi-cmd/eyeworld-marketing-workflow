@@ -51,12 +51,14 @@ function Router() {
         </>
       ) : (
         <DashboardLayout>
-          <Route path={"/"} component={Dashboard} />
-          <Route path={"/create-request"} component={CreateRequest} />
-          <Route path={"/request/:requestId"} component={RequestDetails} />
-          <Route path={"/settings"} component={Settings} />
-          <Route path={"/404"} component={NotFound} />
-          <Route component={NotFound} />
+          <Switch>
+            <Route path={"/"} component={Dashboard} />
+            <Route path={"/create-request"} component={CreateRequest} />
+            <Route path={"/request/:requestId"} component={RequestDetails} />
+            <Route path={"/settings"} component={Settings} />
+            <Route path={"/404"} component={NotFound} />
+            <Route component={NotFound} />
+          </Switch>
         </DashboardLayout>
       )}
     </Switch>
